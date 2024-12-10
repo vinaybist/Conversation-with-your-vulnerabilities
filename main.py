@@ -34,22 +34,32 @@ class VulnerabilityScanner:
     
     def initialize_llm(self, model_type: str, api_key: str) -> Any:
         """Initialize the appropriate LLM based on model selection"""
-        if not api_key:
-            raise ValueError(self.config.error_messages.API_KEY_MISSING)
+        try:
+            if not api_key:
+                raise ValueError(self.config.error_messages.API_KEY_MISSING)
+                
+            if model_type == ModelType.GPT:
+                return OpenAI(openai_api_key=api_key)
+            elif model_type in [ModelType.LLAMA, ModelType.MIXTRAL]:
+                return ChatGroq(
+                    model=model_type,
+                    api_key=api_key,
+                    timeout=self.config.api.DEFAULT_TIMEOUT
+                )
+            else:
+                raise ValueError(
+                    self.config.error_messages.INVALID_MODEL.format(model=model_type)
+                )
+        
+        except Exception as e:
+            # Ensure we're not logging the API key in error messages
+            error_message = str(e)
+            if api_key in error_message:
+                error_message = error_message.replace(api_key, "[REDACTED]")
+            self.logger.error(f"Error initializing LLM: {error_message}")
+            raise   
             
-        if model_type == ModelType.GPT:
-            return OpenAI(openai_api_key=api_key)
-        elif model_type in [ModelType.LLAMA, ModelType.MIXTRAL]:
-            return ChatGroq(
-                model=model_type,
-                api_key=api_key,
-                timeout=self.config.api.DEFAULT_TIMEOUT
-            )
-        else:
-            raise ValueError(
-                self.config.error_messages.INVALID_MODEL.format(model=model_type)
-            )
-    
+            
     def load_data(self, uploaded_file) -> pd.DataFrame:
         """Load and validate the uploaded CSV file"""
         try:
@@ -64,7 +74,7 @@ class VulnerabilityScanner:
     def generate_summary(self, df: pd.DataFrame) -> str:
         """Generate a security assessment summary"""
         try:
-            # Create prompts
+            # Get prompts
             column_prompt = PromptTemplate.from_template(
                 self.prompts.desc_column.COLUMN_IDENTIFIER
             )
@@ -93,19 +103,19 @@ class VulnerabilityScanner:
                 self.config.error_messages.ANALYSIS_ERROR.format(error=str(e))
             )
 
-    def generate_technical_analysis(self, df: pd.DataFrame) -> str:
-        """Generate a technical analysis of vulnerabilities"""
-        try:
-            prompt = PromptTemplate.from_template(
-                self.prompts.summary.TECHNICAL_SUMMARY
-            )
-            chain = prompt | self.llm | StrOutputParser()
-            return chain.invoke({"data": df.to_json()})
-        except Exception as e:
-            self.logger.error(f"Error generating technical analysis: {e}")
-            raise ValueError(
-                self.config.error_messages.ANALYSIS_ERROR.format(error=str(e))
-            )
+    # def generate_technical_analysis(self, df: pd.DataFrame) -> str:
+        # """Generate a technical analysis of vulnerabilities"""
+        # try:
+            # prompt = PromptTemplate.from_template(
+                # self.prompts.summary.TECHNICAL_SUMMARY
+            # )
+            # chain = prompt | self.llm | StrOutputParser()
+            # return chain.invoke({"data": df.to_json()})
+        # except Exception as e:
+            # self.logger.error(f"Error generating technical analysis: {e}")
+            # raise ValueError(
+                # self.config.error_messages.ANALYSIS_ERROR.format(error=str(e))
+            # )
 
     def render_ui(self):
         """Render the Streamlit UI"""
@@ -159,12 +169,12 @@ class VulnerabilityScanner:
                             type="secondary",
                             use_container_width=True
                         )
-                    with col1b:
-                        technical_button = st.button(
-                            "Technical Analysis",
-                            type="secondary",
-                            use_container_width=True
-                        )
+                    # with col1b:
+                        # technical_button = st.button(
+                            # "Technical Analysis",
+                            # type="secondary",
+                            # use_container_width=True
+                        # )
                     
                     # Handle interactions
                     if summary_button:
@@ -174,12 +184,12 @@ class VulnerabilityScanner:
                             message.write(summary)
                             st.success(self.config.messages.ANALYSIS_COMPLETE)
                             
-                    elif technical_button:
-                        with st.spinner(self.config.messages.PROCESSING_MESSAGE):
-                            analysis = self.generate_technical_analysis(self.df)
-                            message = st.chat_message("assistant")
-                            message.write(analysis)
-                            st.success(self.config.messages.ANALYSIS_COMPLETE)
+                    # elif technical_button:
+                        # with st.spinner(self.config.messages.PROCESSING_MESSAGE):
+                            # analysis = self.generate_technical_analysis(self.df)
+                            # message = st.chat_message("assistant")
+                            # message.write(analysis)
+                            # st.success(self.config.messages.ANALYSIS_COMPLETE)
                             
                     elif query_text:
                         with st.spinner(self.config.messages.PROCESSING_MESSAGE):

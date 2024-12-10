@@ -13,6 +13,19 @@ class ModelType(str, Enum):
     MIXTRAL = "mixtral-8x7b-32768"
 
 @dataclass
+class SecurityConfig:
+    """Security-related configuration"""
+    SENSITIVE_PATTERNS: List[str] = field(default_factory=lambda: [ 
+        # API Keys and Tokens
+        "api_key",
+        "api-key",
+        "apikey",
+        "key",
+        "token",
+        "secret",    
+    ])
+
+@dataclass
 class FileConfig:
     """File-related configuration"""
     SAMPLE_FILE_PATH: Path = Path("sample/sample.csv")
@@ -104,7 +117,6 @@ class AppConfig:
     ui: UIConfig = field(default_factory=UIConfig)
     log: LogConfig = field(default_factory=LogConfig)
     api: APIConfig = field(default_factory=APIConfig)
-    chart: ChartConfig = field(default_factory=ChartConfig)
+    sec: SecurityConfig = field(default_factory=SecurityConfig)
     error_messages: ErrorMessages = field(default_factory=ErrorMessages)
     messages: Messages = field(default_factory=Messages)
-    html_templates: HTMLTemplates = field(default_factory=HTMLTemplates)

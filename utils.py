@@ -6,7 +6,8 @@ from datetime import datetime
 
 class Utils:
     """Utility class containing helper methods for the application"""
-    
+
+
     @staticmethod
     def clean_text(text: str) -> str:
             """
@@ -42,3 +43,25 @@ class Utils:
             text = ' '.join(text.split())
             
             return text.strip()    
+            
+    @staticmethod
+    def sanitize_log_message(message: str, sensitive_data: Union[str, List[str]]) -> str:
+        """
+        Sanitize log messages by removing sensitive data
+        
+        Args:
+            message (str): Message to sanitize
+            sensitive_data (str or list): Data to redact
+            
+        Returns:
+            str: Sanitized message
+        """
+        if isinstance(sensitive_data, str):
+            sensitive_data = [sensitive_data]
+            
+        sanitized_message = message
+        for data in sensitive_data:
+            if data and data in sanitized_message:
+                sanitized_message = sanitized_message.replace(data, "[REDACTED]")
+                
+        return sanitized_message            
