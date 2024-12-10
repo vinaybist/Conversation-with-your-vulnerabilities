@@ -3,3 +3,4 @@ streamlit-pills
 pandasai
 langchain_groq
 langchain_community
+seaborn
