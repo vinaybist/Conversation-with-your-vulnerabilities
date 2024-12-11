@@ -3,8 +3,4 @@ streamlit-pills
 pandasai
 langchain_groq
 langchain_community
-<<<<<<< HEAD
 seaborn
-=======
-seaborn
->>>>>>> 7ba6a0374a443cd17c638f7d4049bf9ecab67106
