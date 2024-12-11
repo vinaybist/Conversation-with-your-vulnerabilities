@@ -31,6 +31,7 @@ class FileConfig:
     SAMPLE_FILE_PATH: Path = Path("sample/sample.csv")
     ALLOWED_EXTENSIONS: Set[str] = field(default_factory=lambda: {"csv"})
     MAX_FILE_SIZE_MB: int = 10
+    SAMPLE_FILE_NAME: str = "sample.csv"
 
 @dataclass
 class UIConfig:
@@ -61,19 +62,6 @@ class APIConfig:
     DEFAULT_TIMEOUT: int = 30
 
 @dataclass
-class ChartConfig:
-    """Chart and visualization configuration"""
-    COLORS: Dict[str, str] = field(default_factory=lambda: {
-        "Critical": "#ff0000",
-        "High": "#ff4500",
-        "Medium": "#ffa500",
-        "Low": "#ffff00",
-        "Info": "#00ff00"
-    })
-    DEFAULT_CHART_HEIGHT: int = 400
-    DEFAULT_CHART_WIDTH: int = 600
-
-@dataclass
 class ErrorMessages:
     """Error messages used throughout the application"""
     FILE_UPLOAD_ERROR: str = "Error uploading file. Please try again."
@@ -82,8 +70,6 @@ class ErrorMessages:
     FILE_LOAD_ERROR: str = "Error loading CSV file: {error}"
     ANALYSIS_ERROR: str = "Error generating analysis: {error}"
     GENERAL_ERROR: str = "An error occurred. Please check your inputs and try again."
-    FILE_TYPE_ERROR: str = "Only CSV files are supported"
-    FILE_SIZE_ERROR: str = "File size exceeds maximum limit of {limit}MB"
 
 @dataclass
 class Messages:
@@ -92,23 +78,7 @@ class Messages:
     UPLOAD_PROMPT: str = "Please Upload CSV File to continue ..."
     ANALYSIS_COMPLETE: str = "Analysis completed successfully"
     PROCESSING_MESSAGE: str = "Processing your request..."
-
-@dataclass
-class HTMLTemplates:
-    """HTML templates for rich text display"""
-    SUMMARY_TEMPLATE: str = """
-    <div style="padding: 20px; border: 1px solid #ccc; border-radius: 5px;">
-        <h3>{title}</h3>
-        <div>{content}</div>
-    </div>
-    """
-    
-    ERROR_TEMPLATE: str = """
-    <div style="padding: 20px; border: 1px solid #ff0000; border-radius: 5px; background-color: #fff5f5;">
-        <h3 style="color: #ff0000;">Error</h3>
-        <div>{message}</div>
-    </div>
-    """
+    REQUIRED_PROMPT: str = "Please provide all mandatory parameters ..."
 
 @dataclass
 class AppConfig:

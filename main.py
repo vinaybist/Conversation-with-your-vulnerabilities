@@ -136,39 +136,90 @@ class VulnerabilityScanner:
             value="", 
             type="password"
         )
-        uploaded_file = st.sidebar.file_uploader("Step3: Upload csv file", type=self.config.file.ALLOWED_EXTENSIONS)
-        print(uploaded_file)
+        uploaded_file = st.sidebar.file_uploader(
+            "Step3: Upload csv file", 
+            type=self.config.file.ALLOWED_EXTENSIONS
+        )
+
+        col_sample1, col_sample2 = st.sidebar.columns(2)
+        with col_sample1:
+            if st.button("Demo Sample"):
+                try:
+                    sample_data = pd.read_csv(self.config.file.SAMPLE_FILE_PATH)
+                    st.session_state.df = sample_data
+                    st.session_state.using_sample = True
+                except Exception as e:
+                    self.logger.error(f"Error loading sample file: {e}")
+                    st.error("Error loading sample file")
+
+        with col_sample2:
+            with open(self.config.file.SAMPLE_FILE_PATH, "r") as csvFileObj:
+                st.download_button(
+                    label="📥Sample CSV",
+                    data=csvFileObj,
+                    file_name=self.config.file.SAMPLE_FILE_NAME,
+                    mime="text/csv",
+                )
+
+        # # Regular file uploader
+        # uploaded_file = st.sidebar.file_uploader(
+        #     "Or upload your own CSV:",
+        #     type=self.config.file.ALLOWED_EXTENSIONS
+        # )
+
+
         # Main layout
-        col1, col2 = st.columns(2)
+        col1, col2 = st.columns([0.95, 0.05])
         
         with col1:
             st.markdown(self.config.messages.WELCOME_MESSAGE)
             
-            if all([uploaded_file, api_key, model != ModelType.NONE]):
-                try:
+            #if all([uploaded_file, api_key, model != ModelType.NONE]):
+            if (uploaded_file or (st.session_state.get('using_sample', False))) and api_key and model != ModelType.NONE:
+                try:                    
                     self.llm = self.initialize_llm(model, api_key)
-                    self.df = self.load_data(uploaded_file)
-                    
+                    #self.df = self.load_data(uploaded_file)
+                    # Load data from either source
+                    if uploaded_file:
+                        self.df = self.load_data(uploaded_file)
+                        st.session_state.using_sample = False
+                    else:
+                        self.df = st.session_state.df        
+
                     # Interactive elements
                     question_selected = st_pills.pills(
                         "Quick options to try..",
                         self.config.ui.DEFAULT_QUESTIONS,
                         [""] * len(self.config.ui.DEFAULT_QUESTIONS)
                     )
+                    query_container = st.container()
+
+                    with query_container:
+                        st.write("**Place Your Queries**")  # Header
+                        query_cols = st.columns([0.85, 0.15])
+                        
+                        with query_cols[0]:
+                            query_text = st.text_input(
+                                label="Place Your Queries",
+                                placeholder="Query to the File for continue ...",
+                                value=question_selected,
+                                label_visibility="collapsed" 
+                            )
+                        
+                        with query_cols[1]:
+                            submit_button = st.button(
+                                "Submit",
+                                type="secondary",
+                                use_container_width=True
+                            )
                     
-                    query_text = st.text_input(
-                        placeholder="Query to the File for continue ...",
-                        value=question_selected,
-                        label="Place Your Queries"
+                    #col1a, col1b = st.columns(2)
+                    #with col1a:
+                    summary_button = st.button(
+                        "Quick Summary",
+                        type="secondary",
+                        use_container_width=True
                     )
-                    
-                    col1a, col1b = st.columns(2)
-                    with col1a:
-                        summary_button = st.button(
-                            "Summary",
-                            type="secondary",
-                            use_container_width=True
-                        )
                     # with col1b:
                         # technical_button = st.button(
                             # "Technical Analysis",
@@ -198,14 +249,18 @@ class VulnerabilityScanner:
                             message = st.chat_message("assistant")
                             message.write(response)
                             
+                            # hack to show images on UI
                             if isinstance(response, str) and ".png" in response:
                                 st.image(response)
                             
                 except Exception as e:
                     self.logger.error(f"Application error: {e}")
-                    st.error(self.config.error_messages.GENERAL_ERROR)
+                    st.error(e)
             else:
-                st.warning(self.config.messages.UPLOAD_PROMPT)
+                st.warning(self.config.messages.REQUIRED_PROMPT)
+
+        with col2:
+            pass
 
 def main():
     app = VulnerabilityScanner()
