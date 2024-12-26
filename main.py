@@ -8,12 +8,13 @@ from pandasai import SmartDataframe
 from pandasai.llm.openai import OpenAI
 from langchain_groq.chat_models import ChatGroq
 from langchain_core.output_parsers import StrOutputParser
-from langchain_core.prompts import PromptTemplate
+from langchain_core.prompts import PromptTemplate, ChatPromptTemplate
 import streamlit_pills as st_pills
 
 from constants import AppConfig, ModelType
-from prompts import PromptTemplates
 from utils import Utils
+from prompts import PromptTemplates
+
 
 class VulnerabilityScanner:
     def __init__(self):
@@ -59,7 +60,55 @@ class VulnerabilityScanner:
             self.logger.error(f"Error initializing LLM: {error_message}")
             raise   
             
+    def router(self, user_query, file):
+        try:
+            # Get prompts
+            decision_prompt = PromptTemplate.from_template(
+                self.prompts.routing.ROUTING_DECISION_PROMPT3
+            )
             
+            # Setup chain
+            output_parser = StrOutputParser()
+            
+            # Get routing decision column
+            simple_chain = decision_prompt | self.llm | output_parser
+            decision_factor = simple_chain.invoke({"user_input": user_query, "file": file})
+            self.logger.info("decision_factor == ",decision_factor)
+
+            return decision_factor
+            
+        except Exception as e:
+            self.logger.error(f"Error getting routing : {e}")
+            raise ValueError(
+                self.config.error_messages.ANALYSIS_ERROR.format(error=str(e))
+            )
+
+    def get_pandasai_response(self, df, llm, query_text):
+        dfai = SmartDataframe(df, config={"llm": llm})
+        response = dfai.chat(query_text)
+        return response
+
+    def general_response(self, query_text):
+        """For any other general query LLM response """
+        try:
+            # Get prompts
+            system_prompt = ChatPromptTemplate.from_template(
+                self.prompts.system.SYSTEM_PROMPT
+            )
+            
+            # Generate response
+            response_chain = system_prompt | self.llm | StrOutputParser()
+            
+            res = response_chain.invoke({"user_input": query_text})
+            return res
+            
+        except Exception as e:
+            self.logger.error(f"Error generating summary: {e}")
+            raise ValueError(
+                self.config.error_messages.ANALYSIS_ERROR.format(error=str(e))
+            )        
+        
+
     def load_data(self, uploaded_file) -> pd.DataFrame:
         """Load and validate the uploaded CSV file"""
         try:
@@ -89,7 +138,7 @@ class VulnerabilityScanner:
             column_chain = column_prompt | self.llm | output_parser
             description_column = column_chain.invoke({"columns": str(df.columns)})
             description_column = Utils.clean_text(description_column)
-            print("description_column == ",description_column)
+            self.logger.info("description_column == ",description_column)
             # Generate content
             content = ' '.join(map(str, df[description_column].values.tolist()))
             
@@ -121,7 +170,15 @@ class VulnerabilityScanner:
         """Render the Streamlit UI"""
         st.set_page_config(layout="wide")
         st.title(self.config.ui.PAGE_TITLE)
-        
+
+        # Initialize session state for model and API key if not exists
+        if 'model_selected' not in st.session_state:
+            st.session_state.model_selected = ModelType.NONE
+        if 'api_key_value' not in st.session_state:
+            st.session_state.api_key_value = ""
+        if 'pill_index' not in st.session_state:
+            st.session_state.pill_index = None    
+
         # Sidebar
         st.sidebar.image(
             self.config.ui.SIDEBAR_IMAGE,
@@ -129,11 +186,12 @@ class VulnerabilityScanner:
         )
         model = st.sidebar.selectbox(
             "Step1: Choose a model",
-            [model.value for model in ModelType]
+            [model.value for model in ModelType],
+        index=[m.value for m in ModelType].index(st.session_state.model_selected)                                                           
         )
         api_key = st.sidebar.text_input(
             "Step2: Input your API-KEY", 
-            value="", 
+            value=st.session_state.api_key_value, 
             type="password"
         )
         uploaded_file = st.sidebar.file_uploader(
@@ -148,6 +206,11 @@ class VulnerabilityScanner:
                     sample_data = pd.read_csv(self.config.file.SAMPLE_FILE_PATH)
                     st.session_state.df = sample_data
                     st.session_state.using_sample = True
+                    # Set model and API key values
+                    st.session_state.model_selected = ModelType.LLAMA
+                    st.session_state.api_key_value = "**************************"
+                    # # Force a rerun to update the UI
+                    st.rerun()                    
                 except Exception as e:
                     self.logger.error(f"Error loading sample file: {e}")
                     st.error("Error loading sample file")
@@ -161,13 +224,6 @@ class VulnerabilityScanner:
                     mime="text/csv",
                 )
 
-        # # Regular file uploader
-        # uploaded_file = st.sidebar.file_uploader(
-        #     "Or upload your own CSV:",
-        #     type=self.config.file.ALLOWED_EXTENSIONS
-        # )
-
-
         # Main layout
         col1, col2 = st.columns([0.95, 0.05])
         
@@ -175,7 +231,7 @@ class VulnerabilityScanner:
             st.markdown(self.config.messages.WELCOME_MESSAGE)
             
             #if all([uploaded_file, api_key, model != ModelType.NONE]):
-            if (uploaded_file or (st.session_state.get('using_sample', False))) and api_key and model != ModelType.NONE:
+            if (uploaded_file or (st.session_state.get('using_sample', True))) and api_key and model != ModelType.NONE:
                 try:                    
                     self.llm = self.initialize_llm(model, api_key)
                     #self.df = self.load_data(uploaded_file)
@@ -190,7 +246,8 @@ class VulnerabilityScanner:
                     question_selected = st_pills.pills(
                         "Quick options to try..",
                         self.config.ui.DEFAULT_QUESTIONS,
-                        [""] * len(self.config.ui.DEFAULT_QUESTIONS)
+                        [""] * len(self.config.ui.DEFAULT_QUESTIONS),
+                        index=st.session_state.pill_index
                     )
                     query_container = st.container()
 
@@ -207,11 +264,10 @@ class VulnerabilityScanner:
                             )
                         
                         with query_cols[1]:
-                            submit_button = st.button(
-                                "Submit",
-                                type="secondary",
-                                use_container_width=True
-                            )
+                            if st.button("Submit", type="secondary", use_container_width=True):
+                                # Reset pill selection when Submit is clicked
+                                st.session_state.pill_index = None
+                                st.rerun()
                     
                     #col1a, col1b = st.columns(2)
                     #with col1a:
@@ -243,16 +299,31 @@ class VulnerabilityScanner:
                             # st.success(self.config.messages.ANALYSIS_COMPLETE)
                             
                     elif query_text:
+                        
                         with st.spinner(self.config.messages.PROCESSING_MESSAGE):
-                            dfai = SmartDataframe(self.df, config={"llm": self.llm})
-                            response = dfai.chat(query_text)
-                            message = st.chat_message("assistant")
-                            message.write(response)
-                            
-                            # hack to show images on UI
-                            if isinstance(response, str) and ".png" in response:
-                                st.image(response)
-                            
+                            #get routing info
+                            route_text = self.router(query_text,uploaded_file)
+                            self.logger.info("route_text ========> ",route_text)
+                            #route = json.loads(route_text)["route"]
+                            route = str(route_text)
+                            if "general" in route:
+                                self.logger.info("INSIDE GENERAL ROUTE............\n")
+                                # call normal llm with system prompt of VulnR expert
+                                response = self.general_response(query_text)
+                                message = st.chat_message("assistant")
+                                message.write(response)
+                            else:
+                                self.logger.info("INSIDE PANDASAI ROUTE............\n")
+                                response = self.get_pandasai_response(self.df, self.llm, query_text)
+                                # dfai = SmartDataframe(self.df, config={"llm": self.llm})
+                                # response = dfai.chat(query_text)
+                                message = st.chat_message("assistant")
+                                message.write(response)
+                                
+                                # hack to show images on UI
+                                if isinstance(response, str) and ".png" in response:
+                                    st.image(response)
+
                 except Exception as e:
                     self.logger.error(f"Application error: {e}")
                     st.error(e)
@@ -261,6 +332,11 @@ class VulnerabilityScanner:
 
         with col2:
             pass
+
+
+def render_agentic_UI():
+    pass
+
 
 def main():
     app = VulnerabilityScanner()
