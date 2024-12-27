@@ -73,7 +73,7 @@ class VulnerabilityScanner:
             # Get routing decision column
             simple_chain = decision_prompt | self.llm | output_parser
             decision_factor = simple_chain.invoke({"user_input": user_query, "file": file})
-            self.logger.info("decision_factor == ",decision_factor)
+            self.logger.info("decision_factor:= "+ decision_factor)
 
             return decision_factor
             
@@ -138,7 +138,7 @@ class VulnerabilityScanner:
             column_chain = column_prompt | self.llm | output_parser
             description_column = column_chain.invoke({"columns": str(df.columns)})
             description_column = Utils.clean_text(description_column)
-            self.logger.info("description_column == ",description_column)
+            self.logger.info("description_column == " + str(description_column))
             # Generate content
             content = ' '.join(map(str, df[description_column].values.tolist()))
             
@@ -184,45 +184,59 @@ class VulnerabilityScanner:
             self.config.ui.SIDEBAR_IMAGE,
             use_column_width=True
         )
+
+
+        #col_sample1, col_sample2 = st.sidebar.columns(2)
+        #with col_sample1:
+        #     if st.button("Demo Sample"):
+        #         try:
+        #             sample_data = pd.read_csv(self.config.file.SAMPLE_FILE_PATH)
+        #             st.session_state.df = sample_data
+        #             st.session_state.using_sample = True
+        #             # Set model and API key values
+        #             st.session_state.model_selected = ModelType.NONE
+        #             st.session_state.api_key_value = ""
+        #             # # Force a rerun to update the UI
+        #             st.rerun()                    
+        #         except Exception as e:
+        #             self.logger.error(f"Error loading sample file: {e}")
+        #             st.error("Error loading sample file")
+
+        # with col_sample2:
+        #     with open(self.config.file.SAMPLE_FILE_PATH, "r") as csvFileObj:
+        #         st.download_button(
+        #             label="📥Sample CSV",
+        #             data=csvFileObj,
+        #             file_name=self.config.file.SAMPLE_FILE_NAME,
+        #             mime="text/csv",
+        #         )
+
+        st.sidebar.download_button(
+            label="📥Sample CSV",
+            data=open(self.config.file.SAMPLE_FILE_PATH, "r"),
+            file_name=self.config.file.SAMPLE_FILE_NAME,
+            mime="text/csv",
+        )
+
+        # File uploader with reference to sample
+        uploaded_file = st.sidebar.file_uploader(
+            "Step1: Upload csv file (Sample CSV available above)", 
+            type=self.config.file.ALLOWED_EXTENSIONS
+        )
+        
         model = st.sidebar.selectbox(
-            "Step1: Choose a model",
+            "Step2: Choose a model",
             [model.value for model in ModelType],
         index=[m.value for m in ModelType].index(st.session_state.model_selected)                                                           
         )
         api_key = st.sidebar.text_input(
-            "Step2: Input your API-KEY", 
+            "Step3: Input your API-KEY", 
             value=st.session_state.api_key_value, 
             type="password"
         )
-        uploaded_file = st.sidebar.file_uploader(
-            "Step3: Upload csv file", 
-            type=self.config.file.ALLOWED_EXTENSIONS
-        )
 
-        col_sample1, col_sample2 = st.sidebar.columns(2)
-        with col_sample1:
-            if st.button("Demo Sample"):
-                try:
-                    sample_data = pd.read_csv(self.config.file.SAMPLE_FILE_PATH)
-                    st.session_state.df = sample_data
-                    st.session_state.using_sample = True
-                    # Set model and API key values
-                    st.session_state.model_selected = ModelType.LLAMA
-                    st.session_state.api_key_value = "**************************"
-                    # # Force a rerun to update the UI
-                    st.rerun()                    
-                except Exception as e:
-                    self.logger.error(f"Error loading sample file: {e}")
-                    st.error("Error loading sample file")
 
-        with col_sample2:
-            with open(self.config.file.SAMPLE_FILE_PATH, "r") as csvFileObj:
-                st.download_button(
-                    label="📥Sample CSV",
-                    data=csvFileObj,
-                    file_name=self.config.file.SAMPLE_FILE_NAME,
-                    mime="text/csv",
-                )
+
 
         # Main layout
         col1, col2 = st.columns([0.95, 0.05])
@@ -231,18 +245,20 @@ class VulnerabilityScanner:
             st.markdown(self.config.messages.WELCOME_MESSAGE)
             
             #if all([uploaded_file, api_key, model != ModelType.NONE]):
-            if (uploaded_file or (st.session_state.get('using_sample', True))) and api_key and model != ModelType.NONE:
+            if uploaded_file and api_key and model != ModelType.NONE:
                 try:                    
                     self.llm = self.initialize_llm(model, api_key)
                     #self.df = self.load_data(uploaded_file)
                     # Load data from either source
-                    if uploaded_file:
-                        self.df = self.load_data(uploaded_file)
-                        st.session_state.using_sample = False
-                    else:
-                        self.df = st.session_state.df        
-
-                    # Interactive elements
+                    # if uploaded_file:
+                    #     self.df = self.load_data(uploaded_file)
+                    #     st.session_state.using_sample = False
+                    # else:
+                    #     self.df = st.session_state.df        
+                    self.llm = self.initialize_llm(model, api_key)
+                    self.df = self.load_data(uploaded_file)
+                    
+                     # Interactive elements
                     question_selected = st_pills.pills(
                         "Quick options to try..",
                         self.config.ui.DEFAULT_QUESTIONS,
@@ -303,7 +319,7 @@ class VulnerabilityScanner:
                         with st.spinner(self.config.messages.PROCESSING_MESSAGE):
                             #get routing info
                             route_text = self.router(query_text,uploaded_file)
-                            self.logger.info("route_text ========> ",route_text)
+                            self.logger.info("route_text ========> " + str(route_text))
                             #route = json.loads(route_text)["route"]
                             route = str(route_text)
                             if "general" in route:
@@ -329,6 +345,7 @@ class VulnerabilityScanner:
                     st.error(e)
             else:
                 st.warning(self.config.messages.REQUIRED_PROMPT)
+           
 
         with col2:
             pass
