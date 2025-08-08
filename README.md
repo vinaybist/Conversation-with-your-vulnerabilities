@@ -21,3 +21,23 @@ Demo app deploy - https://talktoscan.streamlit.app/
 ![image](https://github.com/user-attachments/assets/60bac7b8-fbb3-4d88-9b57-327c71c4e7bd)
 
 
+Note: For automated query generation:
+
+# Check if we need to generate new smart queries
+current_file_name = uploaded_file.name
+if (st.session_state.smart_queries is None or 
+    st.session_state.current_file_name != current_file_name):
+    
+    with st.spinner("🧠 Analyzing your data to suggest relevant queries..."):
+        st.session_state.smart_queries = self.generate_smart_queries(self.df)
+        st.session_state.current_file_name = current_file_name
+
+# Interactive elements
+question_selected = st_pills.pills(
+    "✨ AI-Generated Queries Based on Your Data",
+    st.session_state.smart_queries or self.config.ui.DEFAULT_QUESTIONS,
+    [""] * len(st.session_state.smart_queries or self.config.ui.DEFAULT_QUESTIONS),
+    index=st.session_state.pill_index
+)
+
+
